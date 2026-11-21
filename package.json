@@ -9,6 +9,7 @@
   },
   "keywords": ["ludo", "game", "tests", "jest"],
   "author": "ViniciusAlmeid4",
+  "contributors": ["ViniciusAlmeid4", "LUIZAUGUSTO1113"],
   "license": "MIT",
   "devDependencies": {
     "jest": "^29.7.0"
