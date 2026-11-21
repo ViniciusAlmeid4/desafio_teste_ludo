@@ -1,272 +1,331 @@
-/**
- * ludo.final.test.js
- *
- * Suíte de testes — Parte 2 (CT10 a CT14)
- * Cobre: Reta Final (entrada, avanço parcial, chegada exata, bate-e-volta)
- *        e Vitória.
- *
- * ATENÇÃO: Este arquivo está reservado para ser completado pelo parceiro.
- * Os `describe` blocks e os cenários estão estruturados; os `test` bodies
- * devem ser implementados conforme a especificação do desafio.
- *
- * Executar: npm test
- */
-
 'use strict';
+
+// Testes CT10 a CT14: reta final e vitória.
 
 const {
   PLAYERS,
+  START_POSITIONS,
   TOTAL_COMMON_SQUARES,
   FINAL_STRETCH_LENGTH,
-  NUM_PIECES,
   createGame,
   movePieceFromBase,
   movePiece,
   endTurn,
+  mustSkipTurn,
 } = require('../src/ludo');
 
-// Utilitário: posiciona um peão exatamente antes de entrar na reta final.
-// Para RED (start=0): a reta final começa ao completar 40 casas relativas.
-// A última casa do percurso comum para RED é a posição absoluta 39.
-function putPieceBeforeFinalStretch(game, player, pieceIndex, stepsFromEntry) {
-  const piece = game.players[player].pieces[pieceIndex];
-  // Coloca o peão na última casa do percurso comum
-  piece.inBase = false;
-  // Posição absoluta que fica `stepsFromEntry` antes de entrar na reta final
-  // Para RED: start=0, entra na reta final ao chegar na casa relativa 40 (wrap)
-  // A casa absoluta imediatamente antes da reta final é a 39 (relativa 39).
-  // Para simplificar: colocamos o peão em pos tal que faltam `stepsFromEntry` para a reta
-  const start = player === PLAYERS.RED ? 0 : 20;
-  const absPos = (start + TOTAL_COMMON_SQUARES - stepsFromEntry) % TOTAL_COMMON_SQUARES;
-  piece.pos = absPos;
+const { RED, BLUE } = PLAYERS;
+
+// Coloca o peão no percurso comum, a `faltam` casas de entrar na reta final.
+function antesDaReta(game, cor, i, faltam) {
+  const p = game.players[cor].pieces[i];
+  p.inBase = false;
+  p.pos = (START_POSITIONS[cor] + TOTAL_COMMON_SQUARES - faltam) % TOTAL_COMMON_SQUARES;
+  return p;
 }
 
-// ─── CT10 — Entrada na reta final após volta completa ─────────────────────────
+function naReta(game, cor, i, finalPos) {
+  const p = game.players[cor].pieces[i];
+  p.inBase = false;
+  p.pos = null;
+  p.inFinalStretch = true;
+  p.finalPos = finalPos;
+  return p;
+}
 
-describe('CT10 — Reta Final: entrada após volta completa no percurso', () => {
-  /**
-   * TODO (parceiro): Implemente os testes a seguir.
-   *
-   * Cenário: um peão que completou as 40 casas do percurso comum deve
-   * transitar para inFinalStretch = true ao avançar além da última casa.
-   *
-   * Dicas:
-   * - Use `putPieceBeforeFinalStretch(game, PLAYERS.RED, 0, N)` para posicionar
-   *   o peão N casas antes do início da reta final.
-   * - Após `movePiece(game, 0, N)`, verifique piece.inFinalStretch === true
-   *   e piece.pos === null.
-   */
+function concluirTres(game, cor) {
+  for (let i = 0; i < 3; i++) {
+    naReta(game, cor, i, FINAL_STRETCH_LENGTH).finished = true;
+  }
+}
 
-  test('peão deve ter inFinalStretch = true ao entrar na reta final', () => {
-    const game = createGame(PLAYERS.RED);
-    putPieceBeforeFinalStretch(game, PLAYERS.RED, 0, 3);
-    movePiece(game, 0, 3);
-    const piece = game.players[PLAYERS.RED].pieces[0];
-    expect(piece.inFinalStretch).toBe(true);
-    expect(piece.pos).toBeNull();
+describe('CT10 - entrada na reta final', () => {
+  test('RED na casa 37 com dado 3 entra na reta na posição 0', () => {
+    const game = createGame(RED);
+    const peao = antesDaReta(game, RED, 0, 3);
+
+    const result = movePiece(game, 0, 3);
+
+    expect(result.success).toBe(true);
+    expect(peao.inFinalStretch).toBe(true);
+    expect(peao.pos).toBeNull();
+    expect(peao.finalPos).toBe(0);
   });
 
-  test('peão deve ter pos = null após entrar na reta final', () => {
-    const game = createGame(PLAYERS.RED);
-    putPieceBeforeFinalStretch(game, PLAYERS.RED, 0, 2);
-    movePiece(game, 0, 2);
-    expect(game.players[PLAYERS.RED].pieces[0].pos).toBeNull();
+  test.each([1, 2, 3, 4, 5, 6])('RED na casa 39 com dado %i', (dado) => {
+    const game = createGame(RED);
+    const peao = antesDaReta(game, RED, 0, 1);
+
+    movePiece(game, 0, dado);
+
+    expect(peao.inFinalStretch).toBe(true);
+    expect(peao.finalPos).toBe(dado - 1);
+    expect(peao.finished).toBe(false);
   });
 
-  test('peão deve ter finalPos = 0 ao entrar com dado exato que o coloca no início da reta', () => {
-    const game = createGame(PLAYERS.RED);
-    putPieceBeforeFinalStretch(game, PLAYERS.RED, 0, 1);
-    movePiece(game, 0, 1); // entra e fica na posição 0 da reta final
-    const piece = game.players[PLAYERS.RED].pieces[0];
-    expect(piece.inFinalStretch).toBe(true);
-    // Avançou 0 casas dentro da reta final → finalPos deve ser 0
-    expect(piece.finalPos).toBe(0);
-  });
-
-  // TODO: adicionar mais cenários de entrada conforme necessário
-});
-
-// ─── CT11 — Avanço parcial dentro da reta final ───────────────────────────────
-
-describe('CT11 — Reta Final: avanço parcial (dado < casas restantes)', () => {
-  /**
-   * TODO (parceiro): Implemente os testes a seguir.
-   *
-   * Cenário: peão já está na reta final com finalPos < FINAL_STRETCH_LENGTH.
-   * Com dado menor que as casas restantes, o peão avança sem concluir.
-   *
-   * Dicas:
-   * - Coloque piece.inFinalStretch = true e piece.finalPos = X manualmente.
-   * - Chame movePiece(game, pieceIndex, dado).
-   * - Verifique piece.finalPos === X + dado e piece.finished === false.
-   */
-
-  test('peão avança parcialmente dentro da reta final', () => {
-    const game = createGame(PLAYERS.RED);
-    const piece = game.players[PLAYERS.RED].pieces[0];
-    piece.inBase = false;
-    piece.inFinalStretch = true;
-    piece.finalPos = 2;
-
-    movePiece(game, 0, 2); // casas restantes = 6-2=4; dado=2 < 4
-    expect(piece.finalPos).toBe(4);
-    expect(piece.finished).toBe(false);
-  });
-
-  test('peão não é marcado como finished ao avançar parcialmente', () => {
-    const game = createGame(PLAYERS.RED);
-    const piece = game.players[PLAYERS.RED].pieces[0];
-    piece.inBase = false;
-    piece.inFinalStretch = true;
-    piece.finalPos = 0;
-
-    movePiece(game, 0, 3);
-    expect(piece.finished).toBe(false);
-  });
-
-  // TODO: adicionar mais cenários conforme necessário
-});
-
-// ─── CT12 — Chegada com número exato ─────────────────────────────────────────
-
-describe('CT12 — Reta Final: chegada com número exato ao ponto final', () => {
-  /**
-   * TODO (parceiro): Implemente os testes a seguir.
-   *
-   * Cenário: peão na reta final com exatamente `FINAL_STRETCH_LENGTH - finalPos`
-   * casas restantes. Tirar esse valor exato no dado conclui o trajeto.
-   *
-   * Dicas:
-   * - Defina piece.finalPos = X e dado = FINAL_STRETCH_LENGTH - X.
-   * - Após movePiece, verifique piece.finished === true e piece.finalPos === FINAL_STRETCH_LENGTH.
-   */
-
-  test('dado igual às casas restantes conclui o peão (finished = true)', () => {
-    const game = createGame(PLAYERS.RED);
-    const piece = game.players[PLAYERS.RED].pieces[0];
-    piece.inBase = false;
-    piece.inFinalStretch = true;
-    piece.finalPos = 4; // faltam 2
-
-    const result = movePiece(game, 0, 2);
-    expect(result.finished).toBe(true);
-    expect(piece.finished).toBe(true);
-  });
-
-  test('finalPos deve ser igual a FINAL_STRETCH_LENGTH ao concluir', () => {
-    const game = createGame(PLAYERS.RED);
-    const piece = game.players[PLAYERS.RED].pieces[0];
-    piece.inBase = false;
-    piece.inFinalStretch = true;
-    piece.finalPos = 0; // faltam 6
-
-    movePiece(game, 0, FINAL_STRETCH_LENGTH);
-    expect(piece.finalPos).toBe(FINAL_STRETCH_LENGTH);
-  });
-
-  // TODO: adicionar mais cenários conforme necessário
-});
-
-// ─── CT13 — Excesso de pontos na reta final ("bate e volta") ──────────────────
-
-describe('CT13 — Reta Final: excesso de pontos — bate-e-volta', () => {
-  /**
-   * TODO (parceiro): Implemente os testes a seguir.
-   *
-   * Cenário: peão na reta final com menos casas restantes do que o dado.
-   * O peão vai até o ponto final e recua o excedente.
-   *
-   * Dicas:
-   * - piece.finalPos = X, dado > (FINAL_STRETCH_LENGTH - X).
-   * - Excesso = dado - (FINAL_STRETCH_LENGTH - X).
-   * - finalPos resultante = FINAL_STRETCH_LENGTH - excesso.
-   * - piece.finished deve ser false.
-   */
-
-  test('peão recua o excedente ao ultrapassar o ponto final', () => {
-    const game = createGame(PLAYERS.RED);
-    const piece = game.players[PLAYERS.RED].pieces[0];
-    piece.inBase = false;
-    piece.inFinalStretch = true;
-    piece.finalPos = 4; // faltam 2; dado = 4 → excesso = 2
+  test('BLUE entra na sua reta depois da casa 19', () => {
+    const game = createGame(BLUE);
+    const peao = antesDaReta(game, BLUE, 0, 1);
+    expect(peao.pos).toBe(19);
 
     movePiece(game, 0, 4);
-    // vai até 6 e recua 2 → finalPos = 6 - 2 = 4
-    expect(piece.finalPos).toBe(4);
-    expect(piece.finished).toBe(false);
+
+    expect(peao.inFinalStretch).toBe(true);
+    expect(peao.finalPos).toBe(3);
   });
 
-  test('peão não é marcado como finished ao recuar por excesso', () => {
-    const game = createGame(PLAYERS.RED);
-    const piece = game.players[PLAYERS.RED].pieces[0];
-    piece.inBase = false;
-    piece.inFinalStretch = true;
-    piece.finalPos = 5; // falta 1; dado = 3 → excesso = 2
+  test('BLUE passando pela casa 39 só dá a volta no tabuleiro', () => {
+    const game = createGame(BLUE);
+    const peao = antesDaReta(game, BLUE, 0, 22); // casa 38
 
-    movePiece(game, 0, 3);
-    expect(piece.finished).toBe(false);
+    movePiece(game, 0, 4);
+
+    expect(peao.inFinalStretch).toBe(false);
+    expect(peao.pos).toBe(2);
   });
 
-  // TODO: adicionar mais cenários conforme necessário
+  test('peão recém-saído da base não entra na reta', () => {
+    const game = createGame(RED);
+    movePieceFromBase(game, 0, 6);
+    movePiece(game, 0, 6);
+
+    const peao = game.players[RED].pieces[0];
+    expect(peao.inFinalStretch).toBe(false);
+    expect(peao.pos).toBe(6);
+  });
+
+  test('peão na reta final não pode ser capturado', () => {
+    const game = createGame(RED);
+    const red = antesDaReta(game, RED, 0, 1);
+    movePiece(game, 0, 1);
+    endTurn(game);
+
+    const blue = game.players[BLUE].pieces[0];
+    blue.inBase = false;
+    blue.pos = 35;
+    const result = movePiece(game, 0, 4); // para na 39, onde o RED estava
+
+    expect(result.captured).toBe(false);
+    expect(blue.pos).toBe(39);
+    expect(red.inBase).toBe(false);
+    expect(red.inFinalStretch).toBe(true);
+  });
+
+  test('dois peões na reta final não formam bloqueio no percurso', () => {
+    const game = createGame(BLUE);
+    naReta(game, RED, 0, 2);
+    naReta(game, RED, 1, 2);
+    const blue = antesDaReta(game, BLUE, 0, 22);
+
+    const result = movePiece(game, 0, 4);
+
+    expect(result.success).toBe(true);
+    expect(blue.pos).toBe(2);
+  });
 });
 
-// ─── CT14 — Vitória: todos os 4 peões no ponto final ─────────────────────────
+describe('CT11 - avanço parcial na reta final', () => {
+  test.each([
+    [0, 1, 1],
+    [0, 5, 5],
+    [2, 3, 5],
+    [3, 2, 5],
+  ])('de %i com dado %i vai para %i', (inicio, dado, esperado) => {
+    const game = createGame(RED);
+    const peao = naReta(game, RED, 0, inicio);
 
-describe('CT14 — Vitória: todos os 4 peões concluídos declaram vencedor', () => {
-  /**
-   * TODO (parceiro): Implemente os testes a seguir.
-   *
-   * Cenário: o último peão de um jogador chega ao ponto final.
-   * O campo game.winner deve ser preenchido com o ID do jogador vencedor.
-   *
-   * Dicas:
-   * - Marque 3 peões como finished = true manualmente.
-   * - Posicione o 4º na reta final com as casas certas.
-   * - Chame movePiece para concluir o 4º peão.
-   * - Verifique game.winner === PLAYERS.RED (ou BLUE).
-   * - Verifique que novas jogadas retornam success = false após o fim do jogo.
-   */
+    const result = movePiece(game, 0, dado);
 
-  test('game.winner é definido quando todos os 4 peões chegam ao ponto final', () => {
-    const game = createGame(PLAYERS.RED);
-    const pieces = game.players[PLAYERS.RED].pieces;
+    expect(result.success).toBe(true);
+    expect(result.finished).toBe(false);
+    expect(peao.finalPos).toBe(esperado);
+    expect(peao.finished).toBe(false);
+  });
 
-    // Marca 3 peões como concluídos
-    for (let i = 0; i < 3; i++) {
-      pieces[i].inBase = false;
-      pieces[i].inFinalStretch = true;
-      pieces[i].finalPos = FINAL_STRETCH_LENGTH;
-      pieces[i].finished = true;
-    }
+  test('sem 6 não há jogada extra e a vez passa para o adversário', () => {
+    const game = createGame(RED);
+    naReta(game, RED, 0, 1);
 
-    // 4º peão quase chegando
-    pieces[3].inBase = false;
-    pieces[3].inFinalStretch = true;
-    pieces[3].finalPos = 5; // falta 1
+    const result = movePiece(game, 0, 3);
+    endTurn(game);
+
+    expect(result.extraTurn).toBe(false);
+    expect(game.currentPlayer).toBe(BLUE);
+  });
+});
+
+describe('CT12 - chegada com número exato', () => {
+  test.each([0, 1, 2, 3, 4, 5])('de %i com o valor que falta', (inicio) => {
+    const game = createGame(RED);
+    const peao = naReta(game, RED, 0, inicio);
+
+    const result = movePiece(game, 0, FINAL_STRETCH_LENGTH - inicio);
+
+    expect(result.success).toBe(true);
+    expect(result.finished).toBe(true);
+    expect(peao.finished).toBe(true);
+    expect(peao.finalPos).toBe(FINAL_STRETCH_LENGTH);
+  });
+
+  test('chegar tirando 6 dá jogada extra', () => {
+    const game = createGame(RED);
+    naReta(game, RED, 0, 0);
+
+    expect(movePiece(game, 0, 6).extraTurn).toBe(true);
+    endTurn(game);
+    expect(game.currentPlayer).toBe(RED);
+  });
+
+  test('chegar com outro valor não dá jogada extra', () => {
+    const game = createGame(RED);
+    naReta(game, RED, 0, 4);
+
+    expect(movePiece(game, 0, 2).extraTurn).toBe(false);
+  });
+
+  test('peão que já chegou não se move mais', () => {
+    const game = createGame(RED);
+    const peao = naReta(game, RED, 0, 4);
+    movePiece(game, 0, 2);
+
+    const result = movePiece(game, 0, 3);
+
+    expect(result.success).toBe(false);
+    expect(peao.finalPos).toBe(FINAL_STRETCH_LENGTH);
+    expect(peao.finished).toBe(true);
+  });
+
+  test('um peão concluído não decide a partida', () => {
+    const game = createGame(RED);
+    naReta(game, RED, 0, 5);
+    movePiece(game, 0, 1);
+
+    expect(game.winner).toBeNull();
+  });
+});
+
+describe('CT13 - bate e volta', () => {
+  // faltam (6 - inicio) casas; o que sobra do dado é recuado a partir do 6
+  test.each([
+    [4, 4, 4],
+    [5, 3, 4],
+    [5, 6, 1],
+    [3, 6, 3],
+    [1, 6, 5],
+  ])('de %i com dado %i volta para %i', (inicio, dado, esperado) => {
+    const game = createGame(RED);
+    const peao = naReta(game, RED, 0, inicio);
+
+    const result = movePiece(game, 0, dado);
+
+    expect(result.success).toBe(true);
+    expect(result.finished).toBe(false);
+    expect(peao.finalPos).toBe(esperado);
+    expect(peao.finished).toBe(false);
+    expect(peao.inFinalStretch).toBe(true);
+  });
+
+  test('depois de recuar, conclui na rodada seguinte com o valor exato', () => {
+    const game = createGame(RED);
+    const peao = naReta(game, RED, 0, 5);
+
+    movePiece(game, 0, 3);
+    expect(peao.finalPos).toBe(4);
+
+    endTurn(game);
+    endTurn(game); // BLUE não tem peão fora da base, passa a vez
+
+    movePiece(game, 0, 2);
+    expect(peao.finished).toBe(true);
+  });
+
+  test('recuar tirando 6 ainda dá jogada extra', () => {
+    const game = createGame(RED);
+    naReta(game, RED, 0, 5);
+
+    expect(movePiece(game, 0, 6).extraTurn).toBe(true);
+  });
+});
+
+describe('CT14 - vitória', () => {
+  test('RED vence ao levar o quarto peão ao ponto final', () => {
+    const game = createGame(RED);
+    concluirTres(game, RED);
+    naReta(game, RED, 3, 5);
 
     movePiece(game, 3, 1);
-    expect(game.winner).toBe(PLAYERS.RED);
+
+    expect(game.winner).toBe(RED);
   });
 
-  test('partida é encerrada após a vitória (movimentos retornam success = false)', () => {
-    const game = createGame(PLAYERS.RED);
-    const pieces = game.players[PLAYERS.RED].pieces;
+  test('BLUE também pode vencer', () => {
+    const game = createGame(BLUE);
+    concluirTres(game, BLUE);
+    naReta(game, BLUE, 3, 2);
 
-    for (let i = 0; i < 3; i++) {
-      pieces[i].finished = true;
-      pieces[i].inBase = false;
-      pieces[i].inFinalStretch = true;
-      pieces[i].finalPos = FINAL_STRETCH_LENGTH;
+    movePiece(game, 3, 4);
+
+    expect(game.winner).toBe(BLUE);
+  });
+
+  test('sem vencedor se o último peão passa do ponto final', () => {
+    const game = createGame(RED);
+    concluirTres(game, RED);
+    naReta(game, RED, 3, 5);
+
+    movePiece(game, 3, 3);
+
+    expect(game.winner).toBeNull();
+  });
+
+  test('depois da vitória nenhuma jogada é aceita', () => {
+    const game = createGame(RED);
+    concluirTres(game, RED);
+    naReta(game, RED, 3, 5);
+    movePiece(game, 3, 1);
+
+    expect(movePiece(game, 3, 1).success).toBe(false);
+    expect(movePieceFromBase(game, 0, 6).success).toBe(false);
+
+    endTurn(game);
+    expect(game.currentPlayer).toBe(RED);
+    expect(game.winner).toBe(RED);
+  });
+
+  test('último peão sai da base e completa o percurso até vencer', () => {
+    const game = createGame(RED);
+    concluirTres(game, RED);
+    const peao = game.players[RED].pieces[3];
+
+    movePieceFromBase(game, 3, 6);
+    endTurn(game);
+    expect(game.currentPlayer).toBe(RED);
+
+    for (const dado of [6, 6, 6, 6, 6, 6]) {
+      movePiece(game, 3, dado);
+      endTurn(game);
     }
-    pieces[3].inBase = false;
-    pieces[3].inFinalStretch = true;
-    pieces[3].finalPos = 5;
-    movePiece(game, 3, 1); // vence aqui
+    expect(peao.pos).toBe(36);
+    expect(game.currentPlayer).toBe(RED);
 
-    // Tentativa de continuar jogando
-    const extraResult = movePiece(game, 3, 1);
-    expect(extraResult.success).toBe(false);
+    movePiece(game, 3, 3);
+    endTurn(game);
+    expect(peao.pos).toBe(39);
+    expect(game.currentPlayer).toBe(BLUE);
+
+    expect(mustSkipTurn(game, 2)).toBe(true);
+    endTurn(game);
+
+    movePiece(game, 3, 1);
+    expect(peao.inFinalStretch).toBe(true);
+    expect(peao.finalPos).toBe(0);
+    endTurn(game);
+
+    expect(mustSkipTurn(game, 5)).toBe(true);
+    endTurn(game);
+
+    movePiece(game, 3, 6);
+    expect(peao.finished).toBe(true);
+    expect(game.winner).toBe(RED);
   });
-
-  // TODO: adicionar mais cenários de vitória conforme necessário
 });
