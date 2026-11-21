@@ -114,7 +114,11 @@ function isPathBlocked(game, player, fromAbsPos, steps) {
     (p) => !p.inBase && !p.inFinalStretch && !p.finished
   );
 
-  for (let step = 1; step <= steps; step++) {
+  // só as casas do percurso comum que o peão anda antes de entrar na reta final
+  const restantes = TOTAL_COMMON_SQUARES - 1 - getRelativePos(fromAbsPos, player);
+  const limite = Math.min(steps, restantes);
+
+  for (let step = 1; step <= limite; step++) {
     const checkPos = (fromAbsPos + step) % TOTAL_COMMON_SQUARES;
     const piecesAtPos = opponentPieces.filter((p) => p.pos === checkPos);
     if (piecesAtPos.length >= 2) {

@@ -122,6 +122,38 @@ describe('CT10 - entrada na reta final', () => {
     expect(result.success).toBe(true);
     expect(blue.pos).toBe(2);
   });
+
+  test('torre depois da entrada da reta não impede o peão de entrar', () => {
+    const game = createGame(RED);
+    const red = antesDaReta(game, RED, 0, 2); // casa 38
+    const torre = game.players[BLUE].pieces.slice(0, 2);
+    torre.forEach((p) => {
+      p.inBase = false;
+      p.pos = 1;
+    });
+
+    // anda 39 e entra na reta; a casa 1 nem faz parte do caminho
+    const result = movePiece(game, 0, 5);
+
+    expect(result.success).toBe(true);
+    expect(red.inFinalStretch).toBe(true);
+    expect(red.finalPos).toBe(3);
+    torre.forEach((p) => expect(p.pos).toBe(1));
+  });
+
+  test('torre antes da entrada continua bloqueando', () => {
+    const game = createGame(RED);
+    const red = antesDaReta(game, RED, 0, 4); // casa 36
+    game.players[BLUE].pieces.slice(0, 2).forEach((p) => {
+      p.inBase = false;
+      p.pos = 38;
+    });
+
+    const result = movePiece(game, 0, 3);
+
+    expect(result.success).toBe(false);
+    expect(red.pos).toBe(36);
+  });
 });
 
 describe('CT11 - avanço parcial na reta final', () => {
