@@ -1,0 +1,16 @@
+{
+  "name": "desafio_teste_ludo",
+  "version": "1.0.0",
+  "description": "Desafio de testes - Jogo Ludo em JavaScript",
+  "main": "src/ludo.js",
+  "scripts": {
+    "test": "jest --coverage",
+    "test:watch": "jest --watch"
+  },
+  "keywords": ["ludo", "game", "tests", "jest"],
+  "author": "ViniciusAlmeid4",
+  "license": "MIT",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
